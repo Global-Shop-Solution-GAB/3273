@@ -1,0 +1,324 @@
+Program.Sub.ScreenSU.Start
+gui.F_MarkNum..create
+gui.F_MarkNum..caption("Mark Number Search Results")
+gui.F_MarkNum..size(11205,6375)
+gui.F_MarkNum..position(0,0)
+gui.F_MarkNum..event(unload,f_marknum_unload)
+gui.F_MarkNum..alwaysontop(False)
+gui.F_MarkNum..fontname("Arial")
+gui.F_MarkNum..fontsize(8)
+gui.F_MarkNum..forecolor(0)
+gui.F_MarkNum..fontstyle(,,,,)
+gui.F_MarkNum..BackColor(-2147483633)
+gui.F_MarkNum..controlbox(True)
+gui.F_MarkNum..maxbutton(True)
+gui.F_MarkNum..minbutton(True)
+gui.F_MarkNum..mousepointer(0)
+gui.F_MarkNum..moveable(True)
+gui.F_MarkNum..sizeable(False)
+gui.F_MarkNum..ShowInTaskBar(True)
+gui.F_MarkNum..titlebar(True)
+gui.F_MarkNum.gsfx_search.create(gsflexgrid)
+gui.F_MarkNum.gsfx_search.FixedRows(0)
+gui.F_MarkNum.gsfx_search.FixedCols(0)
+gui.F_MarkNum.gsfx_search.visible(True)
+gui.F_MarkNum.gsfx_search.size(10650,5535)
+gui.F_MarkNum.gsfx_search.zorder(0)
+gui.F_MarkNum.gsfx_search.position(200,200)
+gui.F_MarkNum.gsfx_search.enabled(True)
+
+
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'Coded by: Melinda Keyes
+'Project Start Date: 12/07/2011
+'Hooks: 30623, CRM.nET 42923
+'Quote: 3115
+'Add a search for Mark # (stored in Order Lines User Field 4) to CRM.
+'A mark # will be entered into the Search Text field on one of the tabs
+'(Open Orders, Open Shipments, Sales history) on the Customer Service tab in CRM.
+'A GAB button will be clicked, launching a GAB program to search for sales order lines that
+'include the Mark # entered in the User Field 4 field.
+'Results will be displayed in a list on a separate screen; nothing will be displayed on the CRM screen.
+'The GAB program should be called asynchronously.
+'Only the table for the currently visible tab (OpenOrders,OpenShipments,or SalesHistory) should be searched.
+
+'This version has added functionality to include Customer_PO in the search
+
+F.Intrinsic.Control.SetErrorHandler("Main_Err")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+V.Global.sPO.Declare(String)
+
+F.Intrinsic.Control.If(V.Caller.Hook,=,42923)
+	F.Intrinsic.Control.If(V.Passed.CRM-tabPRM,=,4)
+		F.ODBC.Connection!conX.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass)
+		F.Intrinsic.UI.Inputbox("Please enter the customer PO if known. If not, leave blank.","Customer PO","",V.Global.sPO)
+		F.Intrinsic.Control.CallSub(Initialize_grid)
+		Gui.F_MarkNum..show
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Else
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Main_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: ATG_MARKNUM_CRM_SEARCH.gas",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+
+Program.Sub.Main.End
+
+Program.Sub.Initialize_Grid.Start
+F.Intrinsic.Control.SetErrorHandler("Initialize_Grid_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+V.Local.sQuery.Declare(String)
+V.Local.sMarkNo.Declare(String)
+V.Local.sCustomer.Declare(String)
+V.Local.sTemp.Declare(String)
+V.Local.iC.Declare(Long)
+V.Local.iTab.Declare(Long)
+V.Local.iRow.Declare(Long)
+V.Local.iRows.Declare(Long)
+
+V.Local.iTab.Set(V.Passed.CRM-tabCustServ)
+V.Local.sMarkNo.Set(V.Passed.CRM-txtFilterSel)
+V.Local.sCustomer.Set(V.Passed.DATA-CRM-CompID)
+
+F.Intrinsic.String.Trim(V.Local.sMarkNo,V.Local.sMarkNo)
+
+F.Intrinsic.Control.SelectCase(V.Local.iTab)
+F.Intrinsic.Control.Case(0)
+'Open orders tab is active
+	Gui.F_MarkNum..caption("Open Orders")
+	Gui.F_MarkNum.gsfx_search.Cols(9)
+	Gui.F_MarkNum.gsfx_search.Rows(1)
+	Gui.F_MarkNum.gsfx_search.TextMatrix(0,0,"Order")
+	Gui.F_MarkNum.gsfx_search.TextMatrix(1,0,"Line")
+	Gui.F_MarkNum.gsfx_search.TextMatrix(2,0,"Part")
+	Gui.F_MarkNum.gsfx_search.TextMatrix(3,0,"Loc")
+	Gui.F_MarkNum.gsfx_search.TextMatrix(4,0,"Description")
+	Gui.F_MarkNum.gsfx_search.TextMatrix(5,0,"Date Item Prom")
+	Gui.F_MarkNum.gsfx_search.TextMatrix(6,0,"Qty Ordered")
+	Gui.F_MarkNum.gsfx_search.TextMatrix(7,0,"Qty Shipped")
+	Gui.F_MarkNum.gsfx_search.TextMatrix(8,0,"Qty B/O")
+	F.Intrinsic.Control.For(V.Local.iC,0,8,1)
+		Gui.F_MarkNum.gsfx_search.BuildStyle(1,V.Local.iC,"Type","Locked",True)
+		Gui.F_MarkNum.gsfx_search.BuildStyle(1,V.Local.iC,"FontStyle","Bold",True)
+		Gui.F_MarkNum.gsfx_search.BuildStyle(1,V.Local.iC,"Format","Alignment",4)
+		Gui.F_MarkNum.gsfx_search.BuildStyle(2,V.Local.iC,"Type","Locked",True)
+		Gui.F_MarkNum.gsfx_search.BuildStyle(2,V.Local.iC,"Format","Alignment",2)
+	F.Intrinsic.Control.Next(V.Local.iC)
+	Gui.F_MarkNum.gsfx_search.ApplyStyle(0,1)
+	Gui.F_MarkNum.gsfx_search.SetColumnPercentages(".10:.05:.15:.05:.22:.11:.11:.11:.10")
+
+	F.Intrinsic.Control.If(V.Global.sPO.Trim,=,"")
+		F.Intrinsic.String.Concat("SELECT * FROM ORDER_LINES WHERE RECORD_TYPE = 'L' AND CUSTOMER = '",V.Local.sCustomer,"' AND USER_4 = '",V.Local.sMarkNo,"' ORDER BY ORDER_NO",V.Local.sQuery)
+	F.Intrinsic.Control.Else
+		F.Intrinsic.String.Concat("SELECT DISTINCT order_lines.order_no, order_lines.record_no, order_lines.part, order_lines.location, order_lines.description, order_lines.date_item_prom, order_lines.qty_ordered, order_lines.qty_shipped, order_lines.qty_bo from order_lines join order_header on order_lines.order_no = order_header.order_no where order_lines.record_type = 'L' AND order_lines.CUSTOMER = '",V.Local.sCustomer,"' AND order_lines.USER_4 = '",V.Local.sMarkNo,"' and order_header.customer_po like '%",V.Global.sPO,"%' order by order_lines.order_no",V.Local.sQuery)
+	F.Intrinsic.Control.EndIf
+
+	F.ODBC.Connection!conX.OpenRecordsetRO("rst",V.Local.sQuery)
+	F.Intrinsic.Control.If(V.ODBC.conX!rst.EOF,=,True)
+		F.Intrinsic.UI.Msgbox("No open orders were found with the given mark number.")
+		F.ODBC.conX!rst.Close
+		F.Intrinsic.Control.CallSub(F_marknum_unload)
+	F.Intrinsic.Control.Else
+		F.Intrinsic.Control.DoUntil(V.ODBC.conX!rst.EOF,=,True)
+			V.Local.iRow.Set(V.Screen.F_MarkNum!gsfx_search.Rows)
+			F.Intrinsic.Math.Add(V.Local.iRow,1,V.Local.iRows)
+			Gui.F_MarkNum.gsfx_search.Rows(V.Local.iRows)
+			Gui.F_MarkNum.gsfx_search.TextMatrix(0,V.Local.iRow,V.ODBC.conX!rst.FieldValTrim!ORDER_NO)
+			V.Local.sTemp.Set(V.ODBC.conX!rst.FieldValTrim!RECORD_NO)
+			F.Intrinsic.String.Left(V.Local.sTemp,3,V.Local.sTemp)
+			Gui.F_MarkNum.gsfx_search.TextMatrix(1,V.Local.iRow,V.Local.sTemp)
+			Gui.F_MarkNum.gsfx_search.TextMatrix(2,V.Local.iRow,V.ODBC.conX!rst.FieldValTrim!PART)
+			Gui.F_MarkNum.gsfx_search.TextMatrix(3,V.Local.iRow,V.ODBC.conX!rst.FieldValTrim!LOCATION)
+			Gui.F_MarkNum.gsfx_search.TextMatrix(4,V.Local.iRow,V.ODBC.conX!rst.FieldValTrim!DESCRIPTION)
+			V.Local.sTemp.Set(V.ODBC.conX!rst.FieldValTrim!DATE_ITEM_PROM)
+			F.Intrinsic.String.LimitSplit(V.Local.sTemp,2,V.Local.sTemp)
+			F.Intrinsic.String.Concat(V.Local.sTemp(2),"/",V.Local.sTemp(3),"/",V.Local.sTemp(0),V.Local.sTemp(1),V.Local.sTemp)
+			Gui.F_MarkNum.gsfx_search.TextMatrix(5,V.Local.iRow,V.Local.sTemp)
+			Gui.F_MarkNum.gsfx_search.TextMatrix(6,V.Local.iRow,V.ODBC.conX!rst.FieldValTrim!QTY_ORDERED)
+			Gui.F_MarkNum.gsfx_search.TextMatrix(7,V.Local.iRow,V.ODBC.conX!rst.FieldValTrim!QTY_SHIPPED)
+			Gui.F_MarkNum.gsfx_search.TextMatrix(8,V.Local.iRow,V.ODBC.conX!rst.FieldValTrim!QTY_BO)
+			Gui.F_MarkNum.gsfx_search.ApplyStyle(V.Local.iRow,2)
+			F.ODBC.conX!rst.MoveNext
+		F.Intrinsic.Control.Loop
+		Gui.F_MarkNum.gsfx_search.FixedRows(1)
+	F.Intrinsic.Control.EndIf
+	F.ODBC.conX!rst.Close
+
+F.Intrinsic.Control.Case(1)
+'Open shipments tab is active
+	Gui.F_MarkNum..caption("Open Shipments")
+	Gui.F_MarkNum.gsfx_search.Cols(10)
+	Gui.F_MarkNum.gsfx_search.Rows(1)
+	Gui.F_MarkNum.gsfx_search.TextMatrix(0,0,"Order")
+	Gui.F_MarkNum.gsfx_search.TextMatrix(1,0,"Sfx")
+	Gui.F_MarkNum.gsfx_search.TextMatrix(2,0,"Line")
+	Gui.F_MarkNum.gsfx_search.TextMatrix(3,0,"Part")
+	Gui.F_MarkNum.gsfx_search.TextMatrix(4,0,"Loc")
+	Gui.F_MarkNum.gsfx_search.TextMatrix(5,0,"Description")
+	Gui.F_MarkNum.gsfx_search.TextMatrix(6,0,"Ship Date")
+	Gui.F_MarkNum.gsfx_search.TextMatrix(7,0,"Qty Shipped")
+	Gui.F_MarkNum.gsfx_search.TextMatrix(8,0,"Ship Via")
+	Gui.F_MarkNum.gsfx_search.TextMatrix(9,0,"Type")
+	F.Intrinsic.Control.For(V.Local.iC,0,9,1)
+		Gui.F_MarkNum.gsfx_search.BuildStyle(1,V.Local.iC,"Type","Locked",True)
+		Gui.F_MarkNum.gsfx_search.BuildStyle(1,V.Local.iC,"FontStyle","Bold",True)
+		Gui.F_MarkNum.gsfx_search.BuildStyle(1,V.Local.iC,"Format","Alignment",4)
+		Gui.F_MarkNum.gsfx_search.BuildStyle(2,V.Local.iC,"Type","Locked",True)
+		Gui.F_MarkNum.gsfx_search.BuildStyle(2,V.Local.iC,"Format","Alignment",2)
+	F.Intrinsic.Control.Next(V.Local.iC)
+	Gui.F_MarkNum.gsfx_search.ApplyStyle(0,1)
+	Gui.F_MarkNum.gsfx_search.SetColumnPercentages(".08:.05:.05:.12:.04:.24:.10:.11:.16:.05")
+
+	F.Intrinsic.Control.If(V.Global.sPO.Trim,=,"")
+		F.Intrinsic.String.Concat("SELECT * FROM SHIPMENT_LINES WHERE RECORD_TYPE = 'L' AND CUSTOMER = '",V.Local.sCustomer,"' AND LN_USER_4 = '",V.Local.sMarkNo,"' ORDER BY ORDER_NO",V.Local.sQuery)
+	F.Intrinsic.Control.Else
+		F.Intrinsic.String.Concat("SELECT DISTINCT shipment_lines.order_no, shipment_lines.order_suffix, shipment_lines.order_rec, shipment_lines.part, shipment_lines.location, shipment_lines.order_desc, shipment_lines.date_ship, shipment_lines.qty_shipped, shipment_lines.line_type from SHIPMENT_LINES join Order_Header on shipment_lines.order_no = order_header.order_no where shipment_lines.record_type = 'L' and order_header.customer_po like '%",V.Global.sPO,"%' AND shipment_lines.CUSTOMER = '",V.Local.sCustomer,"' AND shipment_lines.LN_USER_4 = '",V.Local.sMarkNo,"' ORDER BY shipment_lines.ORDER_NO",V.Local.sQuery)
+	F.Intrinsic.Control.EndIf
+
+	F.ODBC.Connection!conX.OpenRecordsetRO("rst",V.Local.sQuery)
+	F.Intrinsic.Control.If(V.ODBC.conX!rst.EOF,=,True)
+		F.Intrinsic.UI.Msgbox("No open shipments were found with the given mark number.")
+		F.ODBC.conX!rst.Close
+		F.Intrinsic.Control.CallSub(F_marknum_unload)
+	F.Intrinsic.Control.Else
+		F.Intrinsic.Control.DoUntil(V.ODBC.conX!rst.EOF,=,True)
+			V.Local.iRow.Set(V.Screen.F_MarkNum!gsfx_search.Rows)
+			F.Intrinsic.Math.Add(V.Local.iRow,1,V.Local.iRows)
+			Gui.F_MarkNum.gsfx_search.Rows(V.Local.iRows)
+			Gui.F_MarkNum.gsfx_search.TextMatrix(0,V.Local.iRow,V.ODBC.conX!rst.FieldValTrim!ORDER_NO)
+			Gui.F_MarkNum.gsfx_search.TextMatrix(1,V.Local.iRow,V.ODBC.conX!rst.FieldValTrim!ORDER_SUFFIX)
+			V.Local.sTemp.Set(V.ODBC.conX!rst.FieldValTrim!ORDER_REC)
+			F.Intrinsic.String.Left(V.Local.sTemp,3,V.Local.sTemp)
+			Gui.F_MarkNum.gsfx_search.TextMatrix(2,V.Local.iRow,V.Local.sTemp)
+			Gui.F_MarkNum.gsfx_search.TextMatrix(3,V.Local.iRow,V.ODBC.conX!rst.FieldValTrim!PART)
+			Gui.F_MarkNum.gsfx_search.TextMatrix(4,V.Local.iRow,V.ODBC.conX!rst.FieldValTrim!LOCATION)
+			Gui.F_MarkNum.gsfx_search.TextMatrix(5,V.Local.iRow,V.ODBC.conX!rst.FieldValTrim!ORDER_DESC)
+			V.Local.sTemp.Set(V.ODBC.conX!rst.FieldValTrim!DATE_SHIP)
+			F.Intrinsic.String.LimitSplit(V.Local.sTemp,2,V.Local.sTemp)
+			F.Intrinsic.String.Concat(V.Local.sTemp(2),"/",V.Local.sTemp(1),"/20",V.Local.sTemp(0),V.Local.sTemp)
+			Gui.F_MarkNum.gsfx_search.TextMatrix(6,V.Local.iRow,V.Local.sTemp)
+			Gui.F_MarkNum.gsfx_search.TextMatrix(7,V.Local.iRow,V.ODBC.conX!rst.FieldValTrim!QTY_SHIPPED)
+			F.Intrinsic.String.Concat("SELECT SHIP_VIA FROM SHIPMENT_HEADER WHERE ORDER_NO = '",V.ODBC.conX!rst.FieldValTrim!ORDER_NO,"' AND ORDER_SUFFIX = '",V.ODBC.conX!rst.FieldValTrim!ORDER_SUFFIX,"' AND RECORD_TYPE = 'A'",V.Local.sQuery)
+			F.ODBC.Connection!conX.OpenRecordsetRO("rst2",V.Local.sQuery)
+			F.Intrinsic.Control.If(V.ODBC.conX!rst2.EOF,<>,True)
+				Gui.F_MarkNum.gsfx_search.TextMatrix(8,V.Local.iRow,V.ODBC.conX!rst2.FieldValTrim!SHIP_VIA)
+			F.Intrinsic.Control.EndIf
+			F.ODBC.conX!rst2.Close
+			Gui.F_MarkNum.gsfx_search.TextMatrix(9,V.Local.iRow,V.ODBC.conX!rst.FieldValTrim!LINE_TYPE)
+			Gui.F_MarkNum.gsfx_search.ApplyStyle(V.Local.iRow,2)
+			F.ODBC.conX!rst.MoveNext
+		F.Intrinsic.Control.Loop
+		Gui.F_MarkNum.gsfx_search.FixedRows(1)
+	F.Intrinsic.Control.EndIf
+	F.ODBC.conX!rst.Close
+
+F.Intrinsic.Control.Case(2)
+'Sales history tab is active
+	Gui.F_MarkNum..caption("Sales History")
+	Gui.F_MarkNum.gsfx_search.Cols(10)
+	Gui.F_MarkNum.gsfx_search.Rows(1)
+	Gui.F_MarkNum.gsfx_search.TextMatrix(0,0,"Invoice")
+	Gui.F_MarkNum.gsfx_search.TextMatrix(1,0,"Order")
+	Gui.F_MarkNum.gsfx_search.TextMatrix(2,0,"Sfx")
+	Gui.F_MarkNum.gsfx_search.TextMatrix(3,0,"Line")
+	Gui.F_MarkNum.gsfx_search.TextMatrix(4,0,"Part")
+	Gui.F_MarkNum.gsfx_search.TextMatrix(5,0,"Loc")
+	Gui.F_MarkNum.gsfx_search.TextMatrix(6,0,"Description")
+	Gui.F_MarkNum.gsfx_search.TextMatrix(7,0,"Ship Date")
+	Gui.F_MarkNum.gsfx_search.TextMatrix(8,0,"Qty Shipped")
+	Gui.F_MarkNum.gsfx_search.TextMatrix(9,0,"Ship Via")
+	F.Intrinsic.Control.For(V.Local.iC,0,9,1)
+		Gui.F_MarkNum.gsfx_search.BuildStyle(1,V.Local.iC,"Type","Locked",True)
+		Gui.F_MarkNum.gsfx_search.BuildStyle(1,V.Local.iC,"FontStyle","Bold",True)
+		Gui.F_MarkNum.gsfx_search.BuildStyle(1,V.Local.iC,"Format","Alignment",4)
+		Gui.F_MarkNum.gsfx_search.BuildStyle(2,V.Local.iC,"Type","Locked",True)
+		Gui.F_MarkNum.gsfx_search.BuildStyle(2,V.Local.iC,"Format","Alignment",2)
+	F.Intrinsic.Control.Next(V.Local.iC)
+	Gui.F_MarkNum.gsfx_search.ApplyStyle(0,1)
+	Gui.F_MarkNum.gsfx_search.SetColumnPercentages(".08:.08:.05:.05:.14:.04:.22:.12:.12:.10")
+
+	F.Intrinsic.Control.If(V.Global.sPO.Trim,=,"")
+		F.Intrinsic.String.Concat("SELECT * FROM ORDER_HIST_LINE WHERE CUSTOMER = '",V.Local.sCustomer,"' AND USER_4 = '",V.Local.sMarkNo,"'",V.Local.sQuery)
+	F.Intrinsic.Control.Else
+		F.Intrinsic.String.Concat("SELECT DISTINCT ORDER_HIST_LINE.Invoice, ORDER_HIST_LINE.order_no, ORDER_HIST_LINE.order_suffix, ORDER_HIST_LINE.order_line, ORDER_HIST_LINE.part, ORDER_HIST_LINE.location, ORDER_HIST_LINE.description, ORDER_HIST_LINE.date_shipped, ORDER_HIST_LINE.qty_shipped, ORDER_HIST_LINE.ship_via from ORDER_HIST_LINE join order_header on ORDER_HIST_LINE.order_no = order_header.order_no where order_header.customer_po like '%",V.Global.sPO,"%' and ORDER_HIST_LINE.CUSTOMER = '",V.Local.sCustomer,"' AND ORDER_HIST_LINE.USER_4 = '",V.Local.sMarkNo,"'",V.Local.sQuery)
+	F.Intrinsic.Control.EndIf
+
+	F.ODBC.Connection!conX.OpenRecordsetRO("rst",V.Local.sQuery)
+	F.Intrinsic.Control.If(V.ODBC.conX!rst.EOF,=,True)
+		F.Intrinsic.UI.Msgbox("No previous orders were found with the given mark number.")
+		F.ODBC.conX!rst.Close
+		F.Intrinsic.Control.CallSub(F_marknum_unload)
+	F.Intrinsic.Control.Else
+		F.Intrinsic.Control.DoUntil(V.ODBC.conX!rst.EOF,=,True)
+			V.Local.iRow.Set(V.Screen.F_MarkNum!gsfx_search.Rows)
+			F.Intrinsic.Math.Add(V.Local.iRow,1,V.Local.iRows)
+			Gui.F_MarkNum.gsfx_search.Rows(V.Local.iRows)
+			Gui.F_MarkNum.gsfx_search.TextMatrix(0,V.Local.iRow,V.ODBC.conX!rst.FieldValTrim!INVOICE)
+			Gui.F_MarkNum.gsfx_search.TextMatrix(1,V.Local.iRow,V.ODBC.conX!rst.FieldValTrim!ORDER_NO)
+			Gui.F_MarkNum.gsfx_search.TextMatrix(2,V.Local.iRow,V.ODBC.conX!rst.FieldValTrim!ORDER_SUFFIX)
+			V.Local.sTemp.Set(V.ODBC.conX!rst.FieldValTrim!ORDER_LINE)
+			F.Intrinsic.String.Left(V.Local.sTemp,3,V.Local.sTemp)
+			Gui.F_MarkNum.gsfx_search.TextMatrix(3,V.Local.iRow,V.Local.sTemp)
+			Gui.F_MarkNum.gsfx_search.TextMatrix(4,V.Local.iRow,V.ODBC.conX!rst.FieldValTrim!PART)
+			Gui.F_MarkNum.gsfx_search.TextMatrix(5,V.Local.iRow,V.ODBC.conX!rst.FieldValTrim!LOCATION)
+			Gui.F_MarkNum.gsfx_search.TextMatrix(6,V.Local.iRow,V.ODBC.conX!rst.FieldValTrim!DESCRIPTION)
+			V.Local.sTemp.Set(V.ODBC.conX!rst.FieldValTrim!DATE_SHIPPED)
+			F.Intrinsic.String.LimitSplit(V.Local.sTemp,2,V.Local.sTemp)
+			F.Intrinsic.String.Concat(V.Local.sTemp(2),"/",V.Local.sTemp(3),"/",V.Local.sTemp(0),V.Local.sTemp(1),V.Local.sTemp)
+			Gui.F_MarkNum.gsfx_search.TextMatrix(7,V.Local.iRow,V.Local.sTemp)
+			Gui.F_MarkNum.gsfx_search.TextMatrix(8,V.Local.iRow,V.ODBC.conX!rst.FieldValTrim!QTY_SHIPPED)
+			Gui.F_MarkNum.gsfx_search.TextMatrix(9,V.Local.iRow,V.ODBC.conX!rst.FieldValTrim!SHIP_VIA)
+			Gui.F_MarkNum.gsfx_search.ApplyStyle(V.Local.iRow,2)
+			F.ODBC.conX!rst.MoveNext
+		F.Intrinsic.Control.Loop
+		Gui.F_MarkNum.gsfx_search.FixedRows(1)
+	F.Intrinsic.Control.EndIf
+	F.ODBC.conX!rst.Close
+
+F.Intrinsic.Control.CaseElse
+	F.Intrinsic.Control.CallSub(F_marknum_unload)
+F.Intrinsic.Control.EndSelect
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Initialize_Grid_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: ATG_MARKNUM_CRM_SEARCH.gas",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+
+Program.Sub.Initialize_Grid.End
+
+program.sub.f_marknum_unload.start
+F.Intrinsic.Control.SetErrorHandler("f_marknum_unload_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+
+F.ODBC.Connection!conX.Close
+F.Intrinsic.Control.End
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("f_marknum_unload_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: ATG_MARKNUM_CRM_SEARCH.gas",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+
+program.sub.f_marknum_unload.end
+
+
